@@ -6,6 +6,7 @@
 <title>Winstore CS Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/msal/3.7.1/msal-browser.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -257,8 +258,8 @@ body.dark .ticker{background:#1A1D27}
     <div class="nav-section">Overzichten</div>
     <div class="nav-item active" id="nav-main" onclick="showTab('main')">&#9724; Dashboard</div>
     <div class="nav-section">Analyse</div>
-    <div class="nav-item">&#128200; Trends</div>
-    <div class="nav-item">&#127991; Onderwerpen</div>
+    <div class="nav-item" id="nav-trends" onclick="showTab('trends')">&#128200; Trends</div>
+    <div class="nav-item" id="nav-topics" onclick="showTab('topics')">&#127991; Onderwerpen</div>
   </nav>
   <div class="sidebar-bottom">
     <div class="api-status"><div class="dot" id="dot"></div><span id="api-status-text">Demo modus</span></div>
@@ -493,21 +494,60 @@ body.dark .ticker{background:#1A1D27}
     </div>
   </div><!-- end wallboard -->
 
+  <!-- TRENDS VIEW -->
+  <div id="trends-view" class="content" style="display:none">
+    <div class="section-hdr"><div class="section-title">&#128200; Trends — ontwikkeling over tijd</div></div>
+    <div class="half-col">
+      <div class="card"><div class="card-title">Ticketvolume per maand</div><div class="card-sub">Nieuw vs. opgelost over 6 maanden</div><div style="position:relative;height:220px"><canvas id="tr-volume" role="img" aria-label="Ticketvolume per maand"></canvas></div></div>
+      <div class="card"><div class="card-title">Gem. afhandeltijd</div><div class="card-sub">Trend in uren per maand</div><div style="position:relative;height:220px"><canvas id="tr-aht" role="img" aria-label="Afhandeltijd trend"></canvas></div></div>
+    </div>
+    <div class="half-col">
+      <div class="card"><div class="card-title">Heropende tickets per maand</div><div class="card-sub">Kwaliteitsindicator — lager is beter</div><div style="position:relative;height:220px"><canvas id="tr-reopen" role="img" aria-label="Heropende tickets trend"></canvas></div></div>
+      <div class="card"><div class="card-title">SLA-naleving</div><div class="card-sub">Percentage binnen SLA — doel 90%</div><div style="position:relative;height:220px"><canvas id="tr-sla" role="img" aria-label="SLA naleving trend"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- TOPICS VIEW -->
+  <div id="topics-view" class="content" style="display:none">
+    <div class="section-hdr"><div class="section-title">&#127991; Onderwerpen — diepere analyse</div></div>
+    <div class="card">
+      <div class="card-title">Top onderwerpen — groei vs. daling</div>
+      <div class="card-sub">Vergeleken met vorige periode</div>
+      <table><thead><tr><th style="width:40px">#</th><th>Onderwerp</th><th>Aantal</th><th>Vorige</th><th>Verandering</th><th style="width:140px">Trend</th></tr></thead><tbody id="tp-growth"></tbody></table>
+    </div>
+    <div class="half-col">
+      <div class="card"><div class="card-title">Meeste tijd per onderwerp</div><div class="card-sub">Waar zit je grootste tijdsinvestering</div><div style="position:relative;height:240px"><canvas id="tp-time" role="img" aria-label="Tijd per onderwerp"></canvas></div></div>
+      <div class="card"><div class="card-title">Vaakst heropend</div><div class="card-sub">Structurele problemen die terugkomen</div><div id="tp-reopen"></div></div>
+    </div>
+  </div>
+
+
+
 </div><!-- end main -->
 </div><!-- end layout -->
 
 <!-- API MODAL -->
 <div class="modal-overlay" id="api-modal">
   <div class="modal">
-    <h2>&#128279; TOPdesk API koppelen</h2>
-    <p>Vul je TOPdesk gegevens in. Je gegevens worden lokaal in je browser opgeslagen.</p>
-    <div class="info-box"><strong>Applicatietoken aanmaken:</strong><br>TOPdesk &rarr; Mijn instellingen &rarr; Applicatietokens &rarr; Toevoegen</div>
-    <div class="form-grp"><label>TOPdesk URL</label><input type="text" id="api-url" value="https://eazier.topdesk.net"></div>
-    <div class="form-grp"><label>Gebruikersnaam</label><input type="text" id="api-user" value="martijnblom@winstore.nl"></div>
-    <div class="form-grp"><label>Applicatietoken</label><input type="password" id="api-token" placeholder="Plak hier je token"></div>
+    <h2>&#128279; TOPdesk koppelen</h2>
+    <p>Verbind veilig via de Winstore proxy met je Microsoft-account.</p>
+    <div class="info-box"><strong>Microsoft login (aanbevolen):</strong><br>Log in met je Winstore-account. De proxy regelt veilig de TOPdesk-verbinding. Vul eenmalig de Client ID in die je van IT hebt gekregen.</div>
+    <div class="form-grp"><label>SPA Client ID <span style="color:var(--gray-400);font-weight:400">(van IT-beheerder)</span></label><input type="text" id="spa-client-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+    <div class="form-grp"><label>TOPdesk URL</label><input type="text" id="proxy-topdesk-url" value="https://winstore.topdesk.net"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">Annuleren</button>
-      <button class="btn btn-primary" onclick="connectApi()">Verbinden</button>
+      <button class="btn btn-primary" onclick="connectProxy()">&#128274; Inloggen met Microsoft</button>
+    </div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--gray-100)">
+      <details>
+        <summary style="font-size:12px;color:var(--gray-400);cursor:pointer">Geavanceerd: directe koppeling met applicatietoken</summary>
+        <div style="margin-top:12px">
+          <div class="form-grp"><label>TOPdesk URL</label><input type="text" id="api-url" value="https://eazier.topdesk.net"></div>
+          <div class="form-grp"><label>Gebruikersnaam</label><input type="text" id="api-user" value="martijnblom@winstore.nl"></div>
+          <div class="form-grp"><label>Applicatietoken</label><input type="password" id="api-token" placeholder="Plak hier je token"></div>
+          <button class="btn btn-outline" style="width:100%" onclick="connectApi()">Directe verbinding</button>
+        </div>
+      </details>
     </div>
   </div>
 </div>
@@ -565,20 +605,17 @@ activeUnit = localStorage.getItem("activeUnit") || "all";
 
 // ── NAVIGATION ──────────────────────────────────────
 function showTab(tab) {
-  const main = document.getElementById("main-view");
-  const wb = document.getElementById("wallboard");
-  if (tab === "wallboard") {
-    main.style.display = "none";
-    wb.style.display = "block";
-    document.getElementById("nav-wallboard").classList.add("active");
-    document.getElementById("nav-main").classList.remove("active");
-    buildWbAgents();
-  } else {
-    wb.style.display = "none";
-    main.style.display = "block";
-    document.getElementById("nav-main").classList.add("active");
-    document.getElementById("nav-wallboard").classList.remove("active");
-  }
+  const views = {main:"main-view",wallboard:"wallboard",trends:"trends-view",topics:"topics-view"};
+  const navs = {main:"nav-main",wallboard:"nav-wallboard",trends:"nav-trends",topics:"nav-topics"};
+  Object.values(views).forEach(id => { const el=document.getElementById(id); if(el) el.style.display="none"; });
+  Object.values(navs).forEach(id => { const el=document.getElementById(id); if(el) el.classList.remove("active"); });
+  const view = document.getElementById(views[tab] || "main-view");
+  if (view) view.style.display = "block";
+  const nav = document.getElementById(navs[tab] || "nav-main");
+  if (nav) nav.classList.add("active");
+  if (tab === "wallboard") buildWbAgents();
+  if (tab === "trends") buildTrends();
+  if (tab === "topics") buildTopics();
 }
 
 // ── DARK MODE ───────────────────────────────────────
@@ -609,8 +646,122 @@ function matchUnit(t) {
 }
 
 // ── MODAL ───────────────────────────────────────────
-function openModal() { document.getElementById("api-modal").classList.add("open"); }
+function openModal() {
+  const saved = localStorage.getItem("spa_client_id");
+  if (saved && document.getElementById("spa-client-id")) document.getElementById("spa-client-id").value = saved;
+  const td = localStorage.getItem("proxy_topdesk_url");
+  if (td && document.getElementById("proxy-topdesk-url")) document.getElementById("proxy-topdesk-url").value = td;
+  document.getElementById("api-modal").classList.add("open");
+}
 function closeModal() { document.getElementById("api-modal").classList.remove("open"); }
+
+// ── PROXY (MSAL.js) ─────────────────────────────────
+const PROXY_BASE = "https://reversible-bchmb2gyayf9azfz.westeurope-01.azurewebsites.net";
+const PROXY_SCOPE = "api://1012b342-ed2a-4038-ae76-a6184c173eb0/access_as_user";
+const PROXY_AUTHORITY = "https://login.microsoftonline.com/organizations";
+let msalApp = null;
+let msalAccount = null;
+let proxyTopdeskUrl = "https://winstore.topdesk.net";
+let useProxy = false;
+
+try {
+  const savedClientId = localStorage.getItem("spa_client_id");
+  const savedTdUrl = localStorage.getItem("proxy_topdesk_url");
+  if (savedTdUrl) proxyTopdeskUrl = savedTdUrl;
+  if (savedClientId && localStorage.getItem("use_proxy") === "1") {
+    useProxy = true;
+  }
+} catch(e){}
+
+async function connectProxy() {
+  const clientId = document.getElementById("spa-client-id").value.trim();
+  const tdUrl = document.getElementById("proxy-topdesk-url").value.trim().replace(/\/$/,"");
+  if (!clientId) { alert("Vul de SPA Client ID in die je van IT hebt gekregen."); return; }
+  if (typeof msal === "undefined") { alert("Microsoft login bibliotheek niet geladen. Ververs de pagina."); return; }
+
+  proxyTopdeskUrl = tdUrl || "https://winstore.topdesk.net";
+
+  try {
+    msalApp = new msal.PublicClientApplication({
+      auth: {
+        clientId: clientId,
+        authority: PROXY_AUTHORITY,
+        redirectUri: window.location.origin + window.location.pathname,
+      },
+      cache: { cacheLocation: "sessionStorage" },
+    });
+    await msalApp.initialize();
+
+    const result = await msalApp.loginPopup({ scopes: [PROXY_SCOPE] });
+    msalAccount = result.account;
+    msalApp.setActiveAccount(msalAccount);
+
+    localStorage.setItem("spa_client_id", clientId);
+    localStorage.setItem("proxy_topdesk_url", proxyTopdeskUrl);
+    localStorage.setItem("use_proxy", "1");
+    useProxy = true;
+    isLive = true;
+    setLiveMode();
+    document.getElementById("api-status-text").textContent = "Verbonden (" + (msalAccount.name || msalAccount.username) + ")";
+    closeModal();
+    await loadLiveData();
+    setInterval(loadLiveData, 5 * 60 * 1000);
+  } catch(e) {
+    alert("Microsoft login mislukt: " + e.message + "\n\nControleer of de Client ID klopt en of IT de app-registratie heeft aangemaakt.");
+  }
+}
+
+async function getProxyToken() {
+  if (!msalApp || !msalAccount) throw new Error("Niet ingelogd");
+  try {
+    const r = await msalApp.acquireTokenSilent({ scopes: [PROXY_SCOPE], account: msalAccount });
+    return r.accessToken;
+  } catch {
+    const r = await msalApp.acquireTokenPopup({ scopes: [PROXY_SCOPE] });
+    return r.accessToken;
+  }
+}
+
+async function proxyFetch(targetUrl) {
+  const token = await getProxyToken();
+  const res = await fetch(PROXY_BASE + "/forward", {
+    method: "GET",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "X-Proxy-Target": targetUrl,
+      "Accept": "application/json",
+    },
+  });
+  if (!res.ok) throw new Error("Proxy " + res.status);
+  return res.json();
+}
+
+async function restoreProxySession() {
+  const clientId = localStorage.getItem("spa_client_id");
+  if (!clientId || typeof msal === "undefined") return false;
+  try {
+    msalApp = new msal.PublicClientApplication({
+      auth: {
+        clientId: clientId,
+        authority: PROXY_AUTHORITY,
+        redirectUri: window.location.origin + window.location.pathname,
+      },
+      cache: { cacheLocation: "sessionStorage" },
+    });
+    await msalApp.initialize();
+    const accounts = msalApp.getAllAccounts();
+    if (accounts.length > 0) {
+      msalAccount = accounts[0];
+      msalApp.setActiveAccount(msalAccount);
+      useProxy = true;
+      isLive = true;
+      setLiveMode();
+      document.getElementById("api-status-text").textContent = "Verbonden (" + (msalAccount.name || msalAccount.username) + ")";
+      return true;
+    }
+  } catch(e) { console.error("Proxy restore fout:", e); }
+  return false;
+}
 
 // ── API ─────────────────────────────────────────────
 async function connectApi() {
@@ -635,16 +786,26 @@ async function connectApi() {
 }
 
 async function loadLiveData() {
-  if (!apiCfg) return;
-  const h = {"Authorization": "Basic " + apiCfg.creds, "Accept": "application/json"};
-  const base = apiCfg.url + "/tas/api/incidents";
+  if (!useProxy && !apiCfg) return;
   try {
-    const [r1, r2, r3] = await Promise.all([
-      fetch(base + "?status=firstLine&page_size=10000", {headers:h}),
-      fetch(base + "?status=secondLine&page_size=10000", {headers:h}),
-      fetch(base + "?status=closed&page_size=10000", {headers:h}),
-    ]);
-    const a1 = await r1.json(), a2 = await r2.json(), cl = await r3.json();
+    let a1, a2, cl;
+    if (useProxy) {
+      const base = proxyTopdeskUrl + "/tas/api/incidents";
+      [a1, a2, cl] = await Promise.all([
+        proxyFetch(base + "?status=firstLine&page_size=10000"),
+        proxyFetch(base + "?status=secondLine&page_size=10000"),
+        proxyFetch(base + "?status=closed&page_size=10000"),
+      ]);
+    } else {
+      const h = {"Authorization": "Basic " + apiCfg.creds, "Accept": "application/json"};
+      const base = apiCfg.url + "/tas/api/incidents";
+      const [r1, r2, r3] = await Promise.all([
+        fetch(base + "?status=firstLine&page_size=10000", {headers:h}),
+        fetch(base + "?status=secondLine&page_size=10000", {headers:h}),
+        fetch(base + "?status=closed&page_size=10000", {headers:h}),
+      ]);
+      a1 = await r1.json(); a2 = await r2.json(); cl = await r3.json();
+    }
     const allOpen = [...(Array.isArray(a1)?a1:[]), ...(Array.isArray(a2)?a2:[])].filter(t => matchUnit(t));
     const closed = Array.isArray(cl) ? cl.filter(t => matchUnit(t)) : [];
     const now = new Date();
@@ -1162,6 +1323,123 @@ function refreshData(){
   if(isLive)loadLiveData();
 }
 
+// ── TRENDS ──────────────────────────────────────────
+let trVolChart, trAhtChart, trReopenChart, trSlaChart;
+const TR_MONTHS = ["Jan","Feb","Mrt","Apr","Mei","Jun"];
+
+function buildTrends() {
+  const dark = document.body.classList.contains("dark");
+  const nieuw = [142,138,151,147,159,142];
+  const opgelost = [135,140,148,150,155,148];
+  const aht = [3.6,3.4,3.5,3.3,3.4,3.2];
+  const reopen = [8,6,9,7,10,11];
+  const sla = [85,87,84,88,86,88];
+
+  if (trVolChart) trVolChart.destroy();
+  trVolChart = new Chart(document.getElementById("tr-volume"), {
+    type:"line", data:{labels:TR_MONTHS, datasets:[
+      {label:"Nieuw",data:nieuw,borderColor:"#185FA5",backgroundColor:"rgba(24,95,165,0.07)",tension:0.4,pointRadius:4,fill:true},
+      {label:"Opgelost",data:opgelost,borderColor:"#1D9E75",backgroundColor:"rgba(29,158,117,0.07)",tension:0.4,pointRadius:4,borderDash:[4,3],fill:true}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11},boxWidth:10,color:tc()}}},scales:{x:{ticks:{font:{size:11},color:tc()},grid:{display:false}},y:{beginAtZero:false,ticks:{font:{size:11},color:tc()},grid:{color:gc()}}}}
+  });
+
+  if (trAhtChart) trAhtChart.destroy();
+  trAhtChart = new Chart(document.getElementById("tr-aht"), {
+    type:"line", data:{labels:TR_MONTHS, datasets:[
+      {label:"Afhandeltijd (uur)",data:aht,borderColor:"#EF9F27",backgroundColor:"rgba(239,159,39,0.08)",tension:0.4,pointRadius:4,fill:true}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11},color:tc()},grid:{display:false}},y:{beginAtZero:false,ticks:{font:{size:11},color:tc(),callback:v=>v+"u"},grid:{color:gc()}}}}
+  });
+
+  if (trReopenChart) trReopenChart.destroy();
+  trReopenChart = new Chart(document.getElementById("tr-reopen"), {
+    type:"bar", data:{labels:TR_MONTHS, datasets:[
+      {label:"Heropend",data:reopen,backgroundColor:reopen.map(v=>v>=9?"rgba(217,79,79,0.8)":"rgba(239,159,39,0.7)"),borderRadius:5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11},color:tc()},grid:{display:false}},y:{beginAtZero:true,ticks:{font:{size:11},color:tc()},grid:{color:gc()}}}}
+  });
+
+  if (trSlaChart) trSlaChart.destroy();
+  trSlaChart = new Chart(document.getElementById("tr-sla"), {
+    type:"line", data:{labels:TR_MONTHS, datasets:[
+      {label:"SLA %",data:sla,borderColor:"#1D9E75",backgroundColor:"rgba(29,158,117,0.07)",tension:0.4,pointRadius:4,fill:true},
+      {label:"Doel 90%",data:TR_MONTHS.map(()=>90),borderColor:"#D94F4F",borderDash:[5,4],pointRadius:0,borderWidth:1.5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11},boxWidth:10,color:tc()}}},scales:{x:{ticks:{font:{size:11},color:tc()},grid:{display:false}},y:{min:70,max:100,ticks:{font:{size:11},color:tc(),callback:v=>v+"%"},grid:{color:gc()}}}}
+  });
+}
+
+// ── TOPICS ──────────────────────────────────────────
+let tpTimeChart;
+function buildTopics() {
+  const growth = [
+    {label:"VPN problemen",count:38,prev:28},
+    {label:"Wachtwoord reset",count:34,prev:30},
+    {label:"Trage laptop",count:19,prev:11},
+    {label:"Office 365 licentie",count:27,prev:26},
+    {label:"Teams audio",count:17,prev:0},
+    {label:"Printer offline",count:22,prev:23},
+    {label:"Outlook sync",count:14,prev:15},
+    {label:"RDP toegang",count:12,prev:18},
+  ];
+  const totG = growth.reduce((s,x)=>s+x.count,0);
+  document.getElementById("tp-growth").innerHTML = growth.map((t,i)=>{
+    const r=i+1,rc=r===1?"r1":r===2?"r2":r===3?"r3":"rn";
+    const diff = t.count - t.prev;
+    const isNew = t.prev === 0;
+    const pct = t.prev>0 ? Math.round(diff/t.prev*100) : null;
+    let badge;
+    if(isNew) badge="<span style='font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:#E8F1FB;color:#185FA5'>NIEUW</span>";
+    else if(diff>0) badge="<span style='font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:#FCEAEA;color:#7A1F1F'>▲ +"+pct+"%</span>";
+    else if(diff<0) badge="<span style='font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:#E6F6F1;color:#0D5C40'>▼ "+pct+"%</span>";
+    else badge="<span style='font-size:11px;color:var(--gray-400)'>—</span>";
+    const bw = Math.round(t.count/growth[0].count*100);
+    const barColor = isNew||diff>0 ? "#D94F4F" : "#1D9E75";
+    return "<tr><td><span class='rank-badge "+rc+"'>"+r+"</span></td>" +
+      "<td style='font-weight:"+(r<=3?600:400)+"'>"+t.label+"</td>" +
+      "<td style='font-weight:600'>"+t.count+"</td>" +
+      "<td style='color:var(--gray-400)'>"+(isNew?"—":t.prev)+"</td>" +
+      "<td>"+badge+"</td>" +
+      "<td><div style='display:flex'><div style='background:var(--gray-100);border-radius:3px;height:5px;flex:1'><div style='width:"+bw+"%;height:5px;border-radius:3px;background:"+barColor+"'></div></div></div></td></tr>";
+  }).join("");
+
+  // Time per topic
+  const timeData = [
+    {label:"VPN problemen",hours:42},
+    {label:"Office 365 licentie",hours:31},
+    {label:"Trage laptop",hours:28},
+    {label:"RDP toegang",hours:22},
+    {label:"Printer offline",hours:18},
+    {label:"Teams audio",hours:14},
+  ];
+  if (tpTimeChart) tpTimeChart.destroy();
+  tpTimeChart = new Chart(document.getElementById("tp-time"), {
+    type:"bar", data:{labels:timeData.map(t=>t.label), datasets:[
+      {label:"Uren",data:timeData.map(t=>t.hours),backgroundColor:"rgba(124,92,191,0.75)",borderRadius:5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:"y",plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{font:{size:11},color:tc(),callback:v=>v+"u"},grid:{color:gc()}},y:{ticks:{font:{size:11},color:tc()},grid:{display:false}}}}
+  });
+
+  // Most reopened
+  const reopened = [
+    {label:"VPN problemen",count:8,pct:21},
+    {label:"Trage laptop",count:5,pct:26},
+    {label:"Office 365 licentie",count:4,pct:15},
+    {label:"RDP toegang",count:3,pct:25},
+    {label:"Printer offline",count:2,pct:9},
+  ];
+  document.getElementById("tp-reopen").innerHTML = reopened.map((t,i)=>{
+    const cls = t.pct>=20?"#D94F4F":"#EF9F27";
+    return "<div class='ranked-row'>" +
+      "<div class='r-num'>"+(i+1)+"</div>" +
+      "<div class='r-name'>"+t.label+"</div>" +
+      "<div class='r-count'>"+t.count+"x</div>" +
+      "<div style='font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:"+(t.pct>=20?"#FCEAEA":"#FDF3E1")+";color:"+(t.pct>=20?"#7A1F1F":"#7A4500")+"'>"+t.pct+"%</div>" +
+    "</div>";
+  }).join("") + "<div style='margin-top:10px;font-size:11px;color:var(--gray-400)'>Percentage = aandeel van dit onderwerp dat heropend werd</div>";
+}
+
 // ── INIT ────────────────────────────────────────────
 window.addEventListener("load",function(){
   if(localStorage.getItem("darkMode")==="1"){
@@ -1182,7 +1460,11 @@ window.addEventListener("load",function(){
   } else {
     renderMonthTabs();
   }
-  if(apiCfg){isLive=true;setLiveMode();loadLiveData();setInterval(loadLiveData,5*60*1000);}
+  if(localStorage.getItem("use_proxy")==="1" && localStorage.getItem("spa_client_id")){
+    restoreProxySession().then(function(ok){ if(ok){ loadLiveData(); setInterval(loadLiveData,5*60*1000); } });
+  } else if(apiCfg){
+    isLive=true;setLiveMode();loadLiveData();setInterval(loadLiveData,5*60*1000);
+  }
 });
 
 window.addEventListener("click",function(e){
